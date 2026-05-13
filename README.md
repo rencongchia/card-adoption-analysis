@@ -25,10 +25,9 @@ sql/
 notebooks/                     (run in numerical order)
   01_validate.ipynb            Load xlsx → schema / PK / FK / null audit → persist CSVs
   02_exploration.ipynb         EDA justifying every downstream numerical choice
-  03_q1_unit_economics.ipynb   Q1: avg profit per tx type + by cost cell + 3-way IC sensitivity
-  04_q2_ltv.ipynb              Q2: cohort/tenure LTV + per-market LTV + sensitivity grid
-  05_q3_markets.ipynb          Q3: market scorecard + bootstrap CIs + recommendations
-  06_figures_for_deck.ipynb    Export PNGs for the deck
+  03_q1_unit_economics.ipynb   Q1: avg profit per tx type + by cost cell + 3-way IC sensitivity → fig1, fig1b, fig2
+  04_q2_ltv.ipynb              Q2: cohort/tenure LTV + per-market LTV + sensitivity grid → fig3
+  05_q3_markets.ipynb          Q3: market scorecard + bootstrap CIs + recommendations → fig4
 src/
   db.py                        DuckDB helpers (get_conn, register_csv_tables, materialize_sql_file)
   ltv.py                       LTV forecasting (cohort_ltv_curve, assumption_sweep)
@@ -49,8 +48,8 @@ jupyter nbconvert --to notebook --execute notebooks/*.ipynb
 ### Tools
 
 - **DuckDB + SQL** for transformations
-- **Pandas** for charts in notebooks
-- **Altair** for in-notebook charts
+- **Pandas** for last-mile aggregation in notebooks
+- **Matplotlib** (+ `src/wise_theme.py`) for all in-notebook charts and deck PNGs
 - **uv** for env management; **nbstripout** for clean notebook diffs
 
 ---
@@ -144,7 +143,7 @@ The structural picture:
 
 #### Methodology choices
 
-- **Variable cost basis = `amount_in_gbp`**, per the brief's explicit statement.
+- **Variable cost basis = `amount_in_gbp`**.
 - **Interchange:** Per-row IC in the transactions sheet and the cost_structure Interchange line treated as **two distinct flows**.
 - **Conversion revenue** is derived, but mildly *negative* on aggregate in this dataset. This might be because the rates table is a single snapshot and doesn't match the rate Wise actually quoted at each transaction time, or that the assumed conversion revenue formula is inaccurate. Flagged on the Q1 slide.
 
@@ -152,19 +151,21 @@ The structural picture:
 
 ### Q2 — 12-month LTV per card
 
-Central estimate **−£5 per card per year**. Sensitivity band: **−£4 to −£11**.
+Central estimate **−£5 per card per year**. Sensitivity band (attrition 0–20%): **−£4 to −£7**.
 
 #### Method
 
-For each tenure month T from 0 to 11:
+For each month after a card is issued, answer two questions:
 
-```
-expected_profit_per_card(T) = transactor_share(T) × profit_per_transactor(T)
-LTV = sum over T = 0..11
-```
+1. **What fraction of cards are still active that month?** (active = ≥1 SUCCESS transaction)
+2. **For the active ones, what's the average profit per card?**
 
-- **T = 0..3**: use observed values directly (≥284 at-risk cards at T=3).
-- **T = 4..11**: extrapolate. Transactor share decays at 10%/month from T=3; profit-per-transactor held at the mean of T=1..T=3.
+Multiply the two → expected profit per card for that month. Sum across months 0–11 → 12-month LTV.
+
+Formally: `expected_profit_per_card(T) = transactor_share(T) × profit_per_transactor(T)`, summed over T = 0..11.
+
+- **T = 0..3** are observed directly from the data (T=3 has 284 at-risk cards globally).
+- **T = 4..11** are extrapolated: transactor share decays at 10%/month from T=3; profit-per-transactor held at the mean of T=1..3.
 
 #### Sensitivity grid
 
@@ -250,23 +251,17 @@ LTV = sum over T = 0..11
 | RO | 37 | −1.59 | [−4.51, +0.27] | spans 0 |
 | **EE** | 66 | −3.09 | [−5.60, **−1.02**] | **loss-making** |
 
-#### What drives per-card outcomes
+#### Growth opportunities
 
-Under the I3 profit model, **Inter-region share is no longer the lever** it appears to be under the per-row-only interpretation (card-weighted Pearson(Inter%, profit/card) ≈ −0.02 in our scorecard). The lever that survives is **transaction frequency × ticket size × ATM share**. EE's deep loss comes from very high frequency (54 tx per active card per 4 months) on slightly loss-making transactions; HU achieves similar frequency at much smaller ticket sizes in slightly positive cells, staying near breakeven.
+**1. Research the five markets with positive per-card averages.** DK, ES, CH, IT, HU all have positive observed profit/card on point estimate. None are statistically confirmed (CIs span 0) — 4 months is too short. Adding more cards in these markets is the safest growth bet: it tightens the CIs without committing to known loss-making segments.
 
-#### Recommendations (focus: ≥30 cards, statistically defensible)
+**2. Hungary is the model Wise customer.** Only market with both positive per-card profit (+£0.15) *and* high cross-border usage (71% Inter share). The cross-border-power-user persona is exactly what Wise's product is designed for. Action: profile the HU customer, then replicate the persona in CZ / RO / PL where Wise has thin penetration today.
 
-**1. Fix Great Britain.** GB is statistically loss-making (n=1,507, CI [−0.73, −0.23]) with the narrowest CI in the book. 52% of the issued cards; observed loss −£0.47/card; 12-month LTV around −£4.40. Action: segment GB customers by behaviour, identify the slice driving the loss, push card-on-file with UK merchants. A 100 cards/mo EE-style → GB-style reallocation = ~£262/mo loss reduction.
+#### Recommendations
 
-**2. Validate Hungary's persona.** HU shows +£0.15/card at 71% Inter share — the most mission-aligned market that doesn't lose money on a point estimate. CI [−0.72, +0.83] spans zero, so it's not yet *statistically* profitable. Action: profile the HU customer (MCC, ticket size, cadence), test the persona in CZ / RO / PL where Wise has thin penetration, and add 100+ more HU cards to tighten the CI.
+**1. Fix Great Britain.** GB is the swing market — 52% of issued cards (n=1,507), statistically loss-making (CI [−0.73, −0.23]), narrowest CI in the book. Action: segment GB customers by behaviour, identify the loss-driving slice, push card-on-file with UK merchants to shift volume from ATM toward POS.
 
-**What we deliberately don't recommend:** exiting markets with thin samples (4-month window too short for a structural call), filtering cash-heavy users (anti-customer-driven), or recommending against Inter-region usage (cross-border IS the product).
-
-#### 2018 → today cross-check
-
-- **Free-ATM monthly cap + per-withdrawal fee beyond it.** Wise shipped this post-2018 (current US: $250/mo free, then $1.95 + 1.95%). Validates the ATM-loss-centre finding; contradicts a purist "no hidden fees" rejection of the fix.
-- **Card scaled from 2,901 (2018) → 1.6M (IPO July 2021).** Fixed-cost amortisation at volume changes the structural math.
-- **Hungary was a strategic priority** — Wise's first direct EU payment-infrastructure integration was with the Hungarian Central Bank (settlement account, GIRO clearing, Qvik instant payments). External validation that HU is a meaningful market for Wise — for reasons beyond what the 2018 sample shows.
+**2. Cap ATM withdrawals structurally.** ATM cells are loss-making in every region — no market-level fix can solve a product-level problem. Action: monthly free-ATM cap + per-withdrawal fee beyond it. **Wise has actually shipped exactly this since 2018** (current US: $250/mo free, then $1.95 + 1.95%) — the data supports it; reality validates it.
 
 #### Caveats (Q3)
 
