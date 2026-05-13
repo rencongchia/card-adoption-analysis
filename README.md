@@ -31,9 +31,10 @@ notebooks/                     (run in numerical order)
   06_figures_for_deck.ipynb    Export PNGs for the deck
 src/
   db.py                        DuckDB helpers (get_conn, register_csv_tables, materialize_sql_file)
-  ltv.py                       LTV forecasting (cohort_ltv_curve, decomposed_ltv, assumption_sweep)
+  ltv.py                       LTV forecasting (cohort_ltv_curve, assumption_sweep)
   markets.py                   Bootstrap 95% CI helper for per-card profit
-figures/*.png                  PNG exports used in the deck (gitignored, regenerated)
+  wise_theme.py                To generate images with the wise theme
+figures/*.png                  PNG exports used in the deck
 ```
 
 ### Regenerate outputs

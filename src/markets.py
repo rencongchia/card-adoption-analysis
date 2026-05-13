@@ -1,9 +1,4 @@
-"""Per-market helpers — bootstrap CIs for per-card profit comparisons.
-
-The market scorecard (sql/06) gives point estimates. Some markets have only a handful
-of cards, so the point estimates can be wildly noisy. Bootstrap CIs let us say
-"this market is reliably better than that one" instead of ranking on noise.
-"""
+"""Per-market helpers — bootstrap CIs for per-card profit comparisons."""
 from __future__ import annotations
 
 from collections.abc import Iterable
