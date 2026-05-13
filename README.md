@@ -45,8 +45,6 @@ nbstripout --install
 jupyter nbconvert --to notebook --execute notebooks/*.ipynb
 ```
 
-Runtime: ~30 seconds. Everything is reproducible from a clean clone.
-
 ### Tools
 
 - **DuckDB + SQL** for transformations

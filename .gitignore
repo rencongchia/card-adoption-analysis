@@ -12,19 +12,10 @@ __pycache__/
 data/processed/
 data/results/
 
-# Source data — Wise provides the brief and dataset; not redistributed via this repo.
-# Keep these locally at the project root and a symlink/copy at data/raw/dataset.xlsx.
 APAC H225 Internship Case Study.pdf
 APAC H225 Internship Case Study Dataset.xlsx
 data/raw/dataset.xlsx
 
-# Reference / scratch material — not part of this submission
-card-payments-analytics/
-
-# OS / IDE
 .DS_Store
 .vscode/
 .idea/
-
-# uv
-.python-version
